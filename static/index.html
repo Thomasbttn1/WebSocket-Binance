@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Market Data Router</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --green: #3fb950;
+    --red: #f85149;
+    --blue: #58a6ff;
+    --yellow: #d29922;
+    --accent: #1f6feb;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; min-height: 100vh; }
+
+  /* ── Auth Screen ── */
+  #auth-screen {
+    display: flex; align-items: center; justify-content: center; min-height: 100vh;
+  }
+  .auth-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 2rem; width: 340px;
+  }
+  .auth-card h1 { font-size: 1.3rem; margin-bottom: 1.5rem; color: var(--blue); }
+  .auth-tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+  .auth-tab {
+    flex: 1; padding: 8px; background: var(--bg); border: none; color: var(--muted);
+    cursor: pointer; font-size: 13px;
+  }
+  .auth-tab.active { background: var(--accent); color: #fff; }
+  .form-group { margin-bottom: 1rem; }
+  .form-group label { display: block; margin-bottom: 5px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+  .form-group input {
+    width: 100%; padding: 9px 12px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); font-size: 14px;
+  }
+  .form-group input:focus { outline: none; border-color: var(--accent); }
+  .btn {
+    padding: 9px 16px; border: none; border-radius: 6px; cursor: pointer;
+    font-size: 13px; font-weight: 500; transition: opacity .15s;
+  }
+  .btn:hover { opacity: .85; }
+  .btn-primary { background: var(--accent); color: #fff; width: 100%; }
+  .btn-green { background: var(--green); color: #000; }
+  .btn-red { background: var(--red); color: #fff; }
+  .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  #auth-error { color: var(--red); font-size: 12px; margin-top: .75rem; min-height: 16px; }
+
+  /* ── Main App ── */
+  #app-screen { display: none; flex-direction: column; height: 100vh; }
+  .topbar {
+    display: flex; align-items: center; padding: 0 1.5rem; height: 52px;
+    background: var(--surface); border-bottom: 1px solid var(--border); gap: 1rem;
+  }
+  .topbar h1 { font-size: 1rem; color: var(--blue); white-space: nowrap; }
+  .topbar .spacer { flex: 1; }
+  .ws-badge {
+    font-size: 11px; padding: 3px 8px; border-radius: 20px; border: 1px solid var(--border);
+  }
+  .ws-badge.connected { border-color: var(--green); color: var(--green); }
+  .ws-badge.disconnected { border-color: var(--red); color: var(--red); }
+  .user-info { color: var(--muted); font-size: 12px; }
+  .btn-logout { padding: 5px 12px; }
+
+  .layout { display: flex; flex: 1; overflow: hidden; }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: 260px; min-width: 260px; background: var(--surface);
+    border-right: 1px solid var(--border); display: flex; flex-direction: column;
+    overflow-y: auto; padding: 1rem;
+  }
+  .sidebar h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin-bottom: .75rem; }
+  .balance-row {
+    display: flex; justify-content: space-between; padding: 6px 0;
+    border-bottom: 1px solid var(--border); font-size: 13px;
+  }
+  .balance-row:last-child { border-bottom: none; }
+  .bal-asset { color: var(--muted); }
+  .bal-avail { color: var(--green); }
+  .bal-reserved { color: var(--yellow); font-size: 11px; }
+
+  .deposit-form { margin-top: 1rem; }
+  .deposit-form .row { display: flex; gap: .5rem; margin-top: .5rem; }
+  .deposit-form select, .deposit-form input[type=number] {
+    background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 7px 10px; font-size: 13px;
+  }
+  .deposit-form select { width: 90px; }
+  .deposit-form input[type=number] { flex: 1; }
+
+  /* ── Main content ── */
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ── Tabs ── */
+  .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .tab {
+    padding: 12px 20px; background: none; border: none; color: var(--muted);
+    cursor: pointer; font-size: 13px; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tab.active { color: var(--text); border-bottom-color: var(--blue); }
+
+  .tab-content { display: none; flex: 1; overflow: hidden; }
+  .tab-content.active { display: flex; flex-direction: column; }
+
+  /* ── Market Tab ── */
+  .market-controls {
+    display: flex; gap: .75rem; padding: 1rem; background: var(--surface);
+    border-bottom: 1px solid var(--border); flex-wrap: wrap; align-items: flex-end;
+  }
+  .control-group { display: flex; flex-direction: column; gap: 4px; }
+  .control-group label { font-size: 11px; color: var(--muted); text-transform: uppercase; }
+  .control-group select {
+    background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 7px 10px; font-size: 13px; min-width: 110px;
+  }
+
+  .market-grid {
+    flex: 1; overflow-y: auto; padding: 1rem; display: grid;
+    grid-template-columns: 1fr 1fr; gap: 1rem; align-content: start;
+  }
+  .market-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem;
+  }
+  .market-card h3 { font-size: 11px; text-transform: uppercase; color: var(--muted); margin-bottom: .75rem; letter-spacing: .5px; }
+  .price-row { display: flex; justify-content: space-between; margin-bottom: .4rem; }
+  .price-label { color: var(--muted); }
+  .price-val { font-weight: 600; font-size: 15px; font-variant-numeric: tabular-nums; }
+  .price-val.bid { color: var(--green); }
+  .price-val.ask { color: var(--red); }
+  .exchange-badge { font-size: 10px; color: var(--muted); background: var(--bg); padding: 2px 6px; border-radius: 4px; }
+  .spread { font-size: 12px; color: var(--muted); margin-top: .5rem; }
+
+  .trade-feed { max-height: 240px; overflow-y: auto; }
+  .trade-item {
+    display: flex; justify-content: space-between; padding: 4px 0;
+    border-bottom: 1px solid var(--border); font-size: 12px; font-variant-numeric: tabular-nums;
+  }
+  .trade-item.buy .t-price { color: var(--green); }
+  .trade-item.sell .t-price { color: var(--red); }
+  .t-exch { color: var(--muted); font-size: 11px; }
+
+  .kline-row {
+    display: grid; grid-template-columns: repeat(4, 1fr) auto; gap: .5rem;
+    padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .kline-row span { text-align: right; }
+  .kline-row .k-o { color: var(--muted); }
+  .kline-row .k-h { color: var(--green); }
+  .kline-row .k-l { color: var(--red); }
+  .kline-row .k-c { color: var(--text); }
+  .kline-closed { font-size: 10px; color: var(--muted); }
+
+  .ewma-value { font-size: 2rem; font-weight: 700; color: var(--blue); font-variant-numeric: tabular-nums; }
+  .ewma-sub { font-size: 11px; color: var(--muted); margin-top: .3rem; }
+
+  .full-col { grid-column: 1 / -1; }
+
+  /* ── Orders Tab ── */
+  .orders-layout { display: flex; flex: 1; overflow: hidden; }
+  .order-form-panel {
+    width: 300px; min-width: 300px; padding: 1.5rem; border-right: 1px solid var(--border);
+    overflow-y: auto;
+  }
+  .order-form-panel h2 { font-size: 13px; font-weight: 600; margin-bottom: 1.25rem; }
+  .side-toggle { display: flex; gap: 0; margin-bottom: 1rem; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+  .side-btn {
+    flex: 1; padding: 8px; background: var(--bg); border: none; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--muted);
+  }
+  .side-btn.active-buy { background: var(--green); color: #000; }
+  .side-btn.active-sell { background: var(--red); color: #fff; }
+
+  .order-table-panel { flex: 1; overflow-y: auto; padding: 1.5rem; }
+  .order-table-panel h2 { font-size: 13px; font-weight: 600; margin-bottom: 1rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: left; padding: 6px 10px; color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--border); }
+  td { padding: 8px 10px; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+  .status-open { color: var(--blue); }
+  .status-filled { color: var(--green); }
+  .status-cancelled { color: var(--muted); text-decoration: line-through; }
+  .cancel-btn { padding: 3px 8px; font-size: 11px; }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed; bottom: 24px; right: 24px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 8px; padding: 12px 18px;
+    font-size: 13px; z-index: 999; transition: opacity .3s;
+    max-width: 320px; display: none;
+  }
+  #toast.show { display: block; }
+  #toast.success { border-color: var(--green); color: var(--green); }
+  #toast.error { border-color: var(--red); color: var(--red); }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════ AUTH SCREEN ══════════════ -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <h1>📈 Market Data Router</h1>
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="switchAuthTab('login')">Login</button>
+      <button class="auth-tab" onclick="switchAuthTab('register')">Register</button>
+    </div>
+    <div class="form-group">
+      <label>Username</label>
+      <input type="text" id="auth-username" placeholder="alice" />
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="auth-password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doAuth()" />
+    </div>
+    <button class="btn btn-primary" onclick="doAuth()">Continue</button>
+    <div id="auth-error"></div>
+  </div>
+</div>
+
+<!-- ══════════════ MAIN APP ══════════════ -->
+<div id="app-screen">
+  <div class="topbar">
+    <h1>📈 Market Data Router</h1>
+    <span class="ws-badge disconnected" id="ws-badge">● WS disconnected</span>
+    <div class="spacer"></div>
+    <span class="user-info" id="user-info"></span>
+    <button class="btn btn-ghost btn-logout" onclick="logout()">Logout</button>
+  </div>
+
+  <div class="layout">
+    <!-- Sidebar: balances + deposit -->
+    <div class="sidebar">
+      <h2>Balances</h2>
+      <div id="balance-list"><span style="color:var(--muted);font-size:12px">Loading…</span></div>
+
+      <div class="deposit-form" style="margin-top:1.5rem">
+        <h2>Deposit</h2>
+        <div class="row">
+          <select id="dep-asset"></select>
+          <input type="number" id="dep-amount" placeholder="Amount" min="0" step="any" />
+        </div>
+        <div class="row" style="margin-top:.5rem">
+          <button class="btn btn-primary" style="width:100%" onclick="doDeposit()">Deposit</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main content -->
+    <div class="main">
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('market')">Market Data</button>
+        <button class="tab" onclick="switchTab('orders')">Orders</button>
+      </div>
+
+      <!-- ── MARKET TAB ── -->
+      <div class="tab-content active" id="tab-market">
+        <div class="market-controls">
+          <div class="control-group">
+            <label>Symbol</label>
+            <select id="ctrl-symbol" onchange="resubscribe()"></select>
+          </div>
+          <div class="control-group">
+            <label>Exchange</label>
+            <select id="ctrl-exchange" onchange="resubscribe()">
+              <option value="all">All</option>
+              <option value="binance">Binance</option>
+              <option value="okx">OKX</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <label>Kline interval</label>
+            <select id="ctrl-interval" onchange="resubscribe()">
+              <option value="1s">1s</option>
+              <option value="10s">10s</option>
+              <option value="1m" selected>1m</option>
+              <option value="5m">5m</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <label>EWMA half-life (s)</label>
+            <input type="number" id="ctrl-halflife" value="30" min="1" style="width:80px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:7px 10px;font-size:13px" onchange="resubscribe()" />
+          </div>
+        </div>
+
+        <div class="market-grid">
+          <!-- Best Touch -->
+          <div class="market-card">
+            <h3>Best Touch</h3>
+            <div id="bt-content">
+              <div class="price-row">
+                <span class="price-label">Bid</span>
+                <span class="price-val bid" id="bt-bid">—</span>
+                <span class="exchange-badge" id="bt-bid-ex"></span>
+              </div>
+              <div class="price-row">
+                <span class="price-label">Ask</span>
+                <span class="price-val ask" id="bt-ask">—</span>
+                <span class="exchange-badge" id="bt-ask-ex"></span>
+              </div>
+              <div class="spread" id="bt-spread"></div>
+            </div>
+          </div>
+
+          <!-- EWMA -->
+          <div class="market-card">
+            <h3>EWMA</h3>
+            <div class="ewma-value" id="ewma-val">—</div>
+            <div class="ewma-sub" id="ewma-sub"></div>
+          </div>
+
+          <!-- Trades -->
+          <div class="market-card">
+            <h3>Recent Trades</h3>
+            <div class="trade-feed" id="trade-feed"></div>
+          </div>
+
+          <!-- Klines -->
+          <div class="market-card">
+            <h3>Live Kline (<span id="kline-interval-label">1m</span>)</h3>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr) auto;gap:.5rem;font-size:11px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border)">
+              <span style="text-align:right">O</span><span style="text-align:right">H</span><span style="text-align:right">L</span><span style="text-align:right">C</span><span></span>
+            </div>
+            <div id="kline-feed"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── ORDERS TAB ── -->
+      <div class="tab-content" id="tab-orders">
+        <div class="orders-layout">
+          <div class="order-form-panel">
+            <h2>Place Limit Order</h2>
+            <div class="side-toggle">
+              <button class="side-btn active-buy" id="side-buy-btn" onclick="selectSide('buy')">Buy</button>
+              <button class="side-btn" id="side-sell-btn" onclick="selectSide('sell')">Sell</button>
+            </div>
+            <div class="form-group">
+              <label>Symbol</label>
+              <select id="order-symbol" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:8px 10px;font-size:13px"></select>
+            </div>
+            <div class="form-group">
+              <label>Price (USDT)</label>
+              <input type="number" id="order-price" placeholder="50000" min="0" step="any"
+                style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:8px 10px;font-size:13px" />
+            </div>
+            <div class="form-group">
+              <label>Quantity</label>
+              <input type="number" id="order-qty" placeholder="0.01" min="0" step="any"
+                style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:8px 10px;font-size:13px" />
+            </div>
+            <button class="btn btn-primary" onclick="placeOrder()" id="order-submit-btn" style="background:var(--green);color:#000">Place Buy Order</button>
+            <div id="order-error" style="color:var(--red);font-size:12px;margin-top:.5rem;min-height:16px"></div>
+          </div>
+
+          <div class="order-table-panel">
+            <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
+              <h2 style="margin:0">My Orders</h2>
+              <button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="loadOrders()">↻ Refresh</button>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th><th>Symbol</th><th>Side</th><th>Price</th><th>Qty</th><th>Status</th><th>Fill</th><th></th>
+                </tr>
+              </thead>
+              <tbody id="orders-body">
+                <tr><td colspan="8" style="color:var(--muted);text-align:center;padding:2rem">No orders yet</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /main -->
+  </div><!-- /layout -->
+</div><!-- /app -->
+
+<div id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════
+// State
+// ══════════════════════════════════════════
+let token = null;
+let username = null;
+let ws = null;
+let authMode = 'login';
+let orderSide = 'buy';
+let pairs = [];
+let assets = [];
+let currentSubs = [];  // active subscription keys for cleanup tracking
+
+// ══════════════════════════════════════════
+// Auth
+// ══════════════════════════════════════════
+function switchAuthTab(mode) {
+  authMode = mode;
+  document.querySelectorAll('.auth-tab').forEach((t, i) => {
+    t.classList.toggle('active', (i === 0) === (mode === 'login'));
+  });
+  document.getElementById('auth-error').textContent = '';
+}
+
+async function doAuth() {
+  const u = document.getElementById('auth-username').value.trim();
+  const p = document.getElementById('auth-password').value;
+  const errEl = document.getElementById('auth-error');
+  errEl.textContent = '';
+  if (!u || !p) { errEl.textContent = 'Please fill in all fields.'; return; }
+
+  if (authMode === 'register') {
+    const r = await api('/register', 'POST', { username: u, password: p });
+    if (r.error) { errEl.textContent = r.error; return; }
+  }
+
+  const r = await api('/login', 'POST', { username: u, password: p });
+  if (r.error) { errEl.textContent = r.error; return; }
+
+  token = r.access_token;
+  username = u;
+  showApp();
+}
+
+function logout() {
+  if (ws) ws.close();
+  token = null; username = null;
+  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('auth-screen').style.display = 'flex';
+}
+
+// ══════════════════════════════════════════
+// App boot
+// ══════════════════════════════════════════
+async function showApp() {
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display = 'flex';
+  document.getElementById('user-info').textContent = `👤 ${username}`;
+
+  const info = await api('/info');
+  pairs = info.pairs || [];
+  assets = info.assets || [];
+
+  // Populate selects
+  ['ctrl-symbol', 'order-symbol'].forEach(id => {
+    const sel = document.getElementById(id);
+    sel.innerHTML = pairs.map(p => `<option value="${p}">${p}</option>`).join('');
+  });
+  const depAsset = document.getElementById('dep-asset');
+  depAsset.innerHTML = assets.map(a => `<option value="${a}">${a}</option>`).join('');
+
+  loadBalance();
+  loadOrders();
+  connectWS();
+}
+
+// ══════════════════════════════════════════
+// WebSocket
+// ══════════════════════════════════════════
+function connectWS() {
+  if (ws) ws.close();
+  const badge = document.getElementById('ws-badge');
+  badge.textContent = '● Connecting…';
+  badge.className = 'ws-badge disconnected';
+
+  ws = new WebSocket(`ws://${location.host}/ws?token=${token}`);
+
+  ws.onopen = () => {
+    badge.textContent = '● WS connected';
+    badge.className = 'ws-badge connected';
+    resubscribe();
+  };
+
+  ws.onclose = () => {
+    badge.textContent = '● WS disconnected';
+    badge.className = 'ws-badge disconnected';
+  };
+
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    handleMarketMsg(msg);
+  };
+}
+
+function resubscribe() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  const symbol = document.getElementById('ctrl-symbol').value;
+  const exchange = document.getElementById('ctrl-exchange').value;
+  const interval = document.getElementById('ctrl-interval').value;
+  const halfLife = parseFloat(document.getElementById('ctrl-halflife').value) || 30;
+
+  document.getElementById('kline-interval-label').textContent = interval;
+
+  // Clear displays
+  document.getElementById('bt-bid').textContent = '—';
+  document.getElementById('bt-ask').textContent = '—';
+  document.getElementById('bt-spread').textContent = '';
+  document.getElementById('bt-bid-ex').textContent = '';
+  document.getElementById('bt-ask-ex').textContent = '';
+  document.getElementById('ewma-val').textContent = '—';
+  document.getElementById('ewma-sub').textContent = '';
+  document.getElementById('trade-feed').innerHTML = '';
+  document.getElementById('kline-feed').innerHTML = '';
+
+  const subs = [
+    { action: 'subscribe', stream: 'best_touch', symbol, exchange },
+    { action: 'subscribe', stream: 'trades', symbol, exchange },
+    { action: 'subscribe', stream: 'klines', symbol, interval, exchange },
+    { action: 'subscribe', stream: 'ewma', symbol, half_life: halfLife, exchange },
+  ];
+  subs.forEach(s => ws.send(JSON.stringify(s)));
+}
+
+// ══════════════════════════════════════════
+// Market message handlers
+// ══════════════════════════════════════════
+function handleMarketMsg(msg) {
+  const { topic, data } = msg;
+  if (!topic || !data) return;
+
+  if (topic.includes('best_touch')) {
+    document.getElementById('bt-bid').textContent = fmt(data.best_bid);
+    document.getElementById('bt-ask').textContent = fmt(data.best_ask);
+    document.getElementById('bt-bid-ex').textContent = data.best_bid_exchange;
+    document.getElementById('bt-ask-ex').textContent = data.best_ask_exchange;
+    const spread = data.best_ask - data.best_bid;
+    document.getElementById('bt-spread').textContent = `Spread: ${spread.toFixed(2)}`;
+
+    // Autofill order price
+    const priceInput = document.getElementById('order-price');
+    if (!priceInput.dataset.touched) {
+      priceInput.value = orderSide === 'buy' ? data.best_ask : data.best_bid;
+    }
+  }
+  else if (topic.includes('trades')) {
+    const feed = document.getElementById('trade-feed');
+    const side = data.quantity > 0 ? 'buy' : 'sell';
+    const div = document.createElement('div');
+    div.className = `trade-item ${data.price > 0 ? 'buy' : 'sell'}`;
+    div.innerHTML = `<span class="t-price">${fmt(data.price)}</span><span>${data.quantity}</span><span class="t-exch">${data.exchange}</span>`;
+    feed.insertBefore(div, feed.firstChild);
+    if (feed.children.length > 40) feed.removeChild(feed.lastChild);
+  }
+  else if (topic.includes('klines')) {
+    const feed = document.getElementById('kline-feed');
+    // Update or prepend
+    const id = `kline-${data.open_time}`;
+    let row = document.getElementById(id);
+    if (!row) {
+      row = document.createElement('div');
+      row.id = id;
+      row.className = 'kline-row';
+      feed.insertBefore(row, feed.firstChild);
+      if (feed.children.length > 20) feed.removeChild(feed.lastChild);
+    }
+    const closedLabel = data.is_closed ? '<span class="kline-closed">✓</span>' : '<span class="kline-closed">…</span>';
+    row.innerHTML = `<span class="k-o">${fmt(data.open)}</span><span class="k-h">${fmt(data.high)}</span><span class="k-l">${fmt(data.low)}</span><span class="k-c">${fmt(data.close)}</span>${closedLabel}`;
+  }
+  else if (topic.includes('ewma')) {
+    document.getElementById('ewma-val').textContent = fmt(data.value);
+    document.getElementById('ewma-sub').textContent = `half-life ${data.half_life}s`;
+  }
+}
+
+// ══════════════════════════════════════════
+// Balance
+// ══════════════════════════════════════════
+async function loadBalance() {
+  const r = await api('/balance');
+  if (r.error) return;
+  const el = document.getElementById('balance-list');
+  el.innerHTML = '';
+  const total = r.total || {};
+  const avail = r.available || {};
+  for (const [asset, bal] of Object.entries(total)) {
+    if (bal === 0 && avail[asset] === 0) continue;
+    const reserved = bal - (avail[asset] || 0);
+    el.innerHTML += `
+      <div class="balance-row">
+        <span class="bal-asset">${asset}</span>
+        <div style="text-align:right">
+          <div class="bal-avail">${fmtBal(avail[asset] || 0)}</div>
+          ${reserved > 0 ? `<div class="bal-reserved">${fmtBal(reserved)} reserved</div>` : ''}
+        </div>
+      </div>`;
+  }
+  if (!el.innerHTML) el.innerHTML = '<span style="color:var(--muted);font-size:12px">Deposit funds to start trading</span>';
+}
+
+async function doDeposit() {
+  const asset = document.getElementById('dep-asset').value;
+  const amount = parseFloat(document.getElementById('dep-amount').value);
+  if (!amount || amount <= 0) { toast('Enter a positive amount', 'error'); return; }
+  const r = await api('/deposit', 'POST', { asset, amount });
+  if (r.error) { toast(r.error, 'error'); return; }
+  toast(`Deposited ${amount} ${asset}`, 'success');
+  document.getElementById('dep-amount').value = '';
+  loadBalance();
+}
+
+// ══════════════════════════════════════════
+// Orders
+// ══════════════════════════════════════════
+function selectSide(side) {
+  orderSide = side;
+  const buyBtn = document.getElementById('side-buy-btn');
+  const sellBtn = document.getElementById('side-sell-btn');
+  const submitBtn = document.getElementById('order-submit-btn');
+  if (side === 'buy') {
+    buyBtn.className = 'side-btn active-buy';
+    sellBtn.className = 'side-btn';
+    submitBtn.style.background = 'var(--green)';
+    submitBtn.style.color = '#000';
+    submitBtn.textContent = 'Place Buy Order';
+  } else {
+    sellBtn.className = 'side-btn active-sell';
+    buyBtn.className = 'side-btn';
+    submitBtn.style.background = 'var(--red)';
+    submitBtn.style.color = '#fff';
+    submitBtn.textContent = 'Place Sell Order';
+  }
+  document.getElementById('order-price').dataset.touched = '';
+}
+
+async function placeOrder() {
+  const symbol = document.getElementById('order-symbol').value;
+  const price = parseFloat(document.getElementById('order-price').value);
+  const quantity = parseFloat(document.getElementById('order-qty').value);
+  const errEl = document.getElementById('order-error');
+  errEl.textContent = '';
+
+  if (!price || !quantity) { errEl.textContent = 'Enter price and quantity.'; return; }
+
+  const token_id = 'ord_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+  const r = await api('/orders', 'POST', { token_id, symbol, side: orderSide, price, quantity });
+  if (r.error) { errEl.textContent = r.error; return; }
+
+  toast(`Order placed: ${orderSide} ${quantity} ${symbol} @ ${price}`, 'success');
+  document.getElementById('order-price').value = '';
+  document.getElementById('order-qty').value = '';
+  document.getElementById('order-price').dataset.touched = '';
+  loadOrders();
+  loadBalance();
+}
+
+let ordersCache = [];
+async function loadOrders() {
+  // We don't have a GET /orders (list) endpoint, so we re-fetch known orders
+  // For simplicity, re-fetch the orders we have cached plus any new ones
+  const tbody = document.getElementById('orders-body');
+  if (!ordersCache.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="color:var(--muted);text-align:center;padding:2rem">No orders yet</td></tr>';
+    return;
+  }
+  // Refresh statuses
+  for (let o of ordersCache) {
+    const r = await api(`/orders/${o.token_id}`);
+    if (!r.error) Object.assign(o, r);
+  }
+  renderOrders();
+  loadBalance();
+}
+
+function renderOrders() {
+  const tbody = document.getElementById('orders-body');
+  if (!ordersCache.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="color:var(--muted);text-align:center;padding:2rem">No orders yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = ordersCache.slice().reverse().map(o => `
+    <tr>
+      <td style="font-family:monospace;font-size:11px;color:var(--muted)">${o.token_id.slice(0,12)}…</td>
+      <td>${o.symbol}</td>
+      <td style="color:${o.side==='buy'?'var(--green)':'var(--red)'};font-weight:500">${o.side.toUpperCase()}</td>
+      <td>${fmt(o.price)}</td>
+      <td>${o.quantity}</td>
+      <td class="status-${o.status}">${o.status}</td>
+      <td>${o.filled_price ? fmt(o.filled_price) : '—'}</td>
+      <td>${o.status === 'open' ? `<button class="btn btn-red cancel-btn" onclick="cancelOrder('${o.token_id}')">Cancel</button>` : ''}</td>
+    </tr>`).join('');
+}
+
+async function cancelOrder(token_id) {
+  const r = await api(`/orders/${token_id}`, 'DELETE');
+  if (r.error) { toast(r.error, 'error'); return; }
+  toast('Order cancelled', 'success');
+  const o = ordersCache.find(x => x.token_id === token_id);
+  if (o) o.status = 'cancelled';
+  renderOrders();
+  loadBalance();
+}
+
+// Patch placeOrder to cache orders
+const _origPlace = placeOrder;
+// Override to also cache
+document.getElementById && (() => {})();
+
+// ══════════════════════════════════════════
+// Tabs
+// ══════════════════════════════════════════
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', i === (name === 'market' ? 0 : 1)));
+  document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+  if (name === 'orders') loadOrders();
+}
+
+// ══════════════════════════════════════════
+// API helper
+// ══════════════════════════════════════════
+async function api(path, method = 'GET', body = null) {
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+  };
+  if (token) opts.headers['Authorization'] = `Bearer ${token}`;
+  if (body) opts.body = JSON.stringify(body);
+  try {
+    const r = await fetch(path, opts);
+    const data = await r.json();
+    if (!r.ok) return { error: data.detail || JSON.stringify(data) };
+    return data;
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
+// ══════════════════════════════════════════
+// Toast
+// ══════════════════════════════════════════
+let toastTimer;
+function toast(msg, type = 'success') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `show ${type}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = ''; }, 3000);
+}
+
+// ══════════════════════════════════════════
+// Formatters
+// ══════════════════════════════════════════
+function fmt(n) {
+  if (n == null || isNaN(n)) return '—';
+  if (n >= 1000) return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return n.toPrecision(6);
+}
+function fmtBal(n) {
+  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 });
+}
+
+// ══════════════════════════════════════════
+// Intercept placeOrder to cache orders
+// ══════════════════════════════════════════
+document.getElementById('order-submit-btn').addEventListener('click', () => {}, false);
+
+// Re-define placeOrder with caching
+window.placeOrder = async function() {
+  const symbol = document.getElementById('order-symbol').value;
+  const price = parseFloat(document.getElementById('order-price').value);
+  const quantity = parseFloat(document.getElementById('order-qty').value);
+  const errEl = document.getElementById('order-error');
+  errEl.textContent = '';
+
+  if (!price || price <= 0 || !quantity || quantity <= 0) {
+    errEl.textContent = 'Enter a valid price and quantity.'; return;
+  }
+
+  const token_id = 'ord_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+  const r = await api('/orders', 'POST', { token_id, symbol, side: orderSide, price, quantity });
+  if (r.error) { errEl.textContent = r.error; return; }
+
+  ordersCache.push(r);
+  toast(`${orderSide.toUpperCase()} ${quantity} ${symbol} @ ${fmt(price)}`, 'success');
+  document.getElementById('order-price').value = '';
+  document.getElementById('order-qty').value = '';
+  document.getElementById('order-price').dataset.touched = '';
+  renderOrders();
+  loadBalance();
+};
+
+// Mark price as touched when user edits it
+document.getElementById('order-price').addEventListener('input', function() {
+  this.dataset.touched = '1';
+});
+</script>
+</body>
+</html>
