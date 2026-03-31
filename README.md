@@ -240,3 +240,4 @@ Demonstrates: registration, login, deposits, order placement, cancellation, bala
 - Lou Girault — lou.girault@edu.devinci.fr
 - Lahbil Abdelhalim - abdelhalim.lahbil@dauphine.eu
 - Rémi Schmitt- remi.schmitt@dauphine.eu
+- Chandeclerc Antoine - antoine.chandeclerc@edu.devinci.fr
