@@ -241,3 +241,4 @@ Demonstrates: registration, login, deposits, order placement, cancellation, bala
 - Lahbil Abdelhalim - abdelhalim.lahbil@dauphine.eu
 - Rémi Schmitt- remi.schmitt@dauphine.eu
 - Chandeclerc Antoine - antoine.chandeclerc@edu.devinci.fr
+- Pierre Berthold - pierre.berthold@edu.devinci.fr
