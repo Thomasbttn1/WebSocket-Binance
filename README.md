@@ -231,3 +231,9 @@ Demonstrates: registration, login, deposits, order placement, cancellation, bala
 └── ws/
     └── router.py            # /ws WebSocket endpoint
 ```
+
+---
+
+## Authors
+
+- **Thomas Betton** — thomas.betton@edu.devinci.fr
