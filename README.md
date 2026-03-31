@@ -238,3 +238,4 @@ Demonstrates: registration, login, deposits, order placement, cancellation, bala
 
 - **Thomas Betton** — thomas.betton@edu.devinci.fr
 - Lou Girault — lou.girault@edu.devinci.fr
+- Lahbil Abdelhalim - abdelhalim.lahbil@dauphine.eu
