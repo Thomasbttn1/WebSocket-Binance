@@ -237,3 +237,4 @@ Demonstrates: registration, login, deposits, order placement, cancellation, bala
 ## Authors
 
 - **Thomas Betton** — thomas.betton@edu.devinci.fr
+- ** Lou Girault ** — lou.girault@edu.devinci.fr
